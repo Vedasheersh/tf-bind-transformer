@@ -52,35 +52,51 @@ def calc_protein_representations_with_subunits(proteins, get_repr_fn, *, device)
 
 # esm related functions
 
-ESM_MAX_LENGTH = 1024
+ESM_MAX_LENGTH = 2048
 ESM_EMBED_DIM = 1280
 
 INT_TO_AA_STR_MAP = {
-    0: 'A',
-    1: 'C',
-    2: 'D',
-    3: 'E',
-    4: 'F',
-    5: 'G',
-    6: 'H',
-    7: 'I',
-    8: 'K',
-    9: 'L',
-    10: 'M',
-    11: 'N',
-    12: 'P',
-    13: 'Q',
-    14: 'R',
-    15: 'S',
-    16: 'T',
-    17: 'V',
-    18: 'W',
+    0: '<cls>',
+    1: '<pad>',
+    2: '<eos>',
+    3: '<unk>',
+    4: 'L',
+    5: 'A',
+    6: 'G',
+    7: 'V',
+    8: 'S',
+    9: 'E',
+    10: 'R',
+    11: 'T',
+    12: 'I',
+    13: 'D',
+    14: 'P',
+    15: 'K',
+    16: 'Q',
+    17: 'N',
+    18: 'F',
     19: 'Y',
-    20: '_'
+    20: 'M',
+    21: 'H',
+    22: 'W',
+    23: 'C',
+    24: 'X',
+    25: 'B',
+    26: 'U',
+    27: 'Z',
+    28: 'O',
+    29: '.',
+    30: '-',
+    31: '<null_1>',
+    32: '<mask>'
 }
+AA_STR_TO_INT_MAP = {v:k for k,v in INT_TO_AA_STR_MAP.items()}
+
+import ipdb
 
 def tensor_to_aa_str(t):
     str_seqs = []
+    #ipdb.set_trace()
     for int_seq in t.unbind(dim = 0):
         str_seq = list(map(lambda t: INT_TO_AA_STR_MAP[t] if t != 20 else '', int_seq.tolist()))
         str_seqs.append(''.join(str_seq))
@@ -88,7 +104,7 @@ def tensor_to_aa_str(t):
 
 @run_once('init_esm')
 def init_esm():
-    model, alphabet = esm.pretrained.esm1b_t33_650M_UR50S()
+    model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
     batch_converter = alphabet.get_batch_converter()
 
     if not PROTEIN_EMBED_USE_CPU:
@@ -104,7 +120,7 @@ def get_single_esm_repr(protein_str):
     batch_labels, batch_strs, batch_tokens = batch_converter(data)
 
     if batch_tokens.shape[1] > ESM_MAX_LENGTH:
-        print(f'warning max length protein esm: {protein_str}')
+        print(f'warning max length protein esm')
 
     batch_tokens = batch_tokens[:, :ESM_MAX_LENGTH]
 

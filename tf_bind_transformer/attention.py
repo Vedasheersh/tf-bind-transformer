@@ -1,3 +1,4 @@
+import ipdb
 import torch
 from torch import nn
 from einops import rearrange
@@ -169,6 +170,7 @@ class JointCrossAttentionBlock(nn.Module):
         mask = None,
         context_mask = None
     ):
+        # ipdb.set_trace()
         attn_out, context_attn_out = self.attn(x, context, mask = mask, context_mask = context_mask)
 
         x = x + attn_out

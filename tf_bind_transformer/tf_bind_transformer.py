@@ -4,6 +4,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn, einsum
 from functools import wraps
+import ipdb
 
 from einops import rearrange, reduce, repeat
 from einops.layers.torch import Rearrange, Reduce
@@ -142,7 +143,6 @@ class FILIP(nn.Module):
 class AdapterModel(nn.Module):
     def __init__(
         self,
-        *,
         smiles_model_dim = 384,
         latent_dim = 64,
         latent_heads = 32,
@@ -155,11 +155,13 @@ class AdapterModel(nn.Module):
         use_mve_loss = False,
         **kwargs
     ):
+        super().__init__()
+        
         self.norm_smiles_embed = nn.LayerNorm(smiles_model_dim)
 
         # protein embedding related variables
 
-        self.smiles_embed_config = get_smiles_embedder()
+        self.smiles_embed_config = get_smiles_embedder(smiles_embed_encoder)
         self.aa_embed_config = get_protein_embedder(aa_embed_encoder)
         self.get_aa_embed = self.aa_embed_config['fn']
         self.get_smiles_embed = self.smiles_embed_config['fn']
@@ -178,7 +180,7 @@ class AdapterModel(nn.Module):
         # joint attn
 
         self.joint_cross_attns = nn.ModuleList([])
-
+        
         for _ in range(joint_cross_attn_depth):
             attn = JointCrossAttentionBlock(
                 dim = aa_embed_dim,
@@ -206,38 +208,40 @@ class AdapterModel(nn.Module):
         out_dim = 2 if use_mve_loss else 1
 
         self.to_pred = nn.Sequential(
-            nn.Linear(latent_heads, out_dim),
+            Reduce('... n d -> ... d', 'mean'),
+            nn.LayerNorm(latent_heads),
+            nn.Linear(latent_heads, 1),
             Rearrange(f'... {out_dim} -> ...')
         )
 
     def forward(
         self,
         smi,
-        aa,
-        label,
-        aa_embed = None,
+        aa_seq,
+        label = None,
         aa_mask = None,
+        smiles_mask = None,
+        return_preds = False
     ):
-        device = smi.device
+        device = label.device
 
+        # protein embeddings
+        aa_embed, aa_mask = self.get_aa_embed(aa_seq, device = device)
+        for self_attn_block in self.protein_self_attns:
+            aa_embed = self_attn_block(aa_embed)
+        
         # smiles embedding
         
-        smi_embed, smi_mask = self.get_smi_embed(smi, device = device)
+        smi_embed, smi_mask = self.get_smiles_embed(smi, device = device)
         
         # norm smiles embedding
         
-        smi_embed = self.norm_smi_embed(smi_embed)
-
-        # protein embeddings
-        
-        aa_embed, aa_mask = self.get_aa_embed(aa, device = seq.device)
-        for self_attn_block in self.protein_self_attns:
-            aa_embed = self_attn_block(aa_embed)
+        smi_embed = self.norm_smiles_embed(smi_embed)
         
         # joint cross attention
 
         for cross_attn in self.joint_cross_attns:
-            seq_embed, aa_embed = cross_attn(
+            aa_embed, smi_embed = cross_attn(
                 aa_embed,
                 mask = aa_mask,
                 context = smi_embed,
@@ -249,16 +253,20 @@ class AdapterModel(nn.Module):
         interactions = self.filip(
             aa_embed,
             smi_embed,
-            context_mask = smis_mask
+            context_mask = smi_mask
         )
 
         logits = self.linear_to_logits(interactions)
 
         # to *-seq prediction
 
-        if not exists(target):
+        if not exists(label):
             return pred
             
         pred = self.to_pred(logits)
 
-        return self.loss_fn(pred, label)
+        loss = self.loss_fn(pred, label) 
+        
+        # ipdb.set_trace()
+        if return_preds: return pred, loss
+        return loss

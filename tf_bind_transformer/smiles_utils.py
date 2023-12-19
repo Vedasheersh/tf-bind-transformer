@@ -57,22 +57,32 @@ def init_chemberta():
 
     GLOBAL_VARIABLES['model'] = (model, tokenizer)
 
-def get_single_smi_repr(tokens):
+import ipdb
+
+def get_single_smi_repr(smi_str):
     init_chemberta()
+    # ipdb.set_trace()
     model, tokenizer = GLOBAL_VARIABLES['model']
-
-    if tokens.shape[1] > CHEMBERTA_MAX_LENGTH:
-        print(f'warning max length smiles chemberta: {tokenizer.decode(tokens)}')
-
-    tokens = tokens[:, :CHEMBERTA_MAX_LENGTH]
-
+    tokens = tokenizer(smi_str, return_tensors='pt', padding='max_length')
+    inputs = tokens['input_ids']
+    mask = tokens['attention_mask']
     if not SMILES_EMBED_USE_CPU:
-        tokens = tokens.cuda()
+        inputs = inputs.cuda()
+        mask = mask.cuda()
+        
+    # ipdb.set_trace()
+    if inputs.shape[1] > CHEMBERTA_MAX_LENGTH:
+        print(f'warning max length smiles chemberta: {smi_str}')
+
+    inputs = inputs[:, :CHEMBERTA_MAX_LENGTH]
+    mask = mask[:, :CHEMBERTA_MAX_LENGTH]
 
     with torch.no_grad():
-        results = model.roberta(tokens)
+        results = model.roberta(**{'input_ids':inputs,'attention_mask':mask})
 
-    return results.last_hidden_state
+    return results.last_hidden_state[0]
+
+import ipdb
 
 def calc_smi_representations(smiles_list, get_repr_fn, *, device):
     representations = []
