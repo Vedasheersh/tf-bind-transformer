@@ -258,6 +258,9 @@ class AdapterModel(nn.Module):
 
         # to *-seq prediction
 
+        if not exists(target):
+            return pred
+            
         pred = self.to_pred(logits)
 
         return self.loss_fn(pred, label)
