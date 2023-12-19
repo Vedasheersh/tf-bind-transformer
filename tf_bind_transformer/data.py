@@ -3,6 +3,7 @@ from random import choice, randrange
 from pathlib import Path
 import functools
 import polars as pl
+import pandas as pd
 from collections import defaultdict
 
 import os
@@ -36,19 +37,8 @@ def cast_list(val = None):
         return []
     return [val] if not isinstance(val, (tuple, list)) else val
 
-def read_bed(path):
-    return pl.read_csv(path, sep = '\t', has_headers = False)
-
-def save_bed(df, path):
-    df.to_csv(path, sep = '\t', has_header = False)
-
-def parse_exp_target_cell(exp_target_cell):
-    experiment, target, *cell_type = exp_target_cell.split('.')
-    cell_type = '.'.join(cell_type) # handle edge case where cell type contains periods
-    return experiment, target, cell_type
-
-# fetch index of datasets, for providing the sequencing reads
-# for auxiliary read value prediction
+def read_csv(path):
+    return pd.read_csv(path)
 
 def fetch_experiments_index(path):
     if not exists(path):
@@ -79,105 +69,6 @@ def fetch_experiments_index(path):
             index[dataset_name] = dataset['peaks_NR']
 
     return index
-
-# fetch protein sequences by gene name and uniprot id
-
-class FactorProteinDatasetByUniprotID(Dataset):
-    def __init__(
-        self,
-        folder,
-        species_priority = ['human', 'mouse']
-    ):
-        super().__init__()
-        fasta_paths = [*Path(folder).glob('*.fasta')]
-        assert len(fasta_paths) > 0, f'no fasta files found at {folder}'
-        self.paths = fasta_paths
-        self.index_by_id = dict()
-
-        for path in fasta_paths:
-            gene, uniprotid, *_ = path.stem.split('.')
-            self.index_by_id[uniprotid] = path
-
-    def __len__(self):
-        return len(self.paths)
-
-    def __getitem__(self, uid):
-        index = self.index_by_id
-
-        if uid not in index:
-            return None
-
-        entry = index[uid]
-        fasta = SeqIO.read(entry, 'fasta')
-        return str(fasta.seq)
-
-# fetch
-
-class FactorProteinDataset(Dataset):
-    def __init__(
-        self,
-        folder,
-        species_priority = ['human', 'mouse', 'unknown'],
-        return_tuple_only = False
-    ):
-        super().__init__()
-        fasta_paths = [*Path(folder).glob('*.fasta')]
-        assert len(fasta_paths) > 0, f'no fasta files found at {folder}'
-        self.paths = fasta_paths
-
-        index_by_gene = defaultdict(list)
-        self.return_tuple_only = return_tuple_only # whether to return tuple even if there is only one subunit
-
-        for path in fasta_paths:
-            gene, uniprotid, *_ = path.stem.split('.')
-            index_by_gene[gene].append(path)
-
-        # prioritize fasta files of certain species
-        # but allow for appropriate fallback, by order of species_priority
-
-        get_species_from_path = lambda p: p.stem.split('_')[-1].lower() if '_' in p.stem else 'unknown'
-
-        filtered_index_by_gene = defaultdict(list)
-
-        for gene, gene_paths in index_by_gene.items():
-            species_count = list(map(lambda specie: len(list(filter(lambda p: get_species_from_path(p) == specie, gene_paths))), species_priority))
-            species_ind_non_zero = find_first_index(lambda t: t > 0, species_count)
-
-            if species_ind_non_zero == -1:
-                continue
-
-            species = species_priority[species_ind_non_zero]
-            filtered_index_by_gene[gene] = list(filter(lambda p: get_species_from_path(p) == species, gene_paths))
-
-        self.index_by_gene = filtered_index_by_gene
-
-    def __len__(self):
-        return len(self.paths)
-
-    def __getitem__(self, unparsed_gene_name):
-        index = self.index_by_gene
-
-        genes = parse_gene_name(unparsed_gene_name)
-        seqs = []
-
-        for gene in genes:
-            entry = index[gene]
-
-            if len(entry) == 0:
-                print(f'no entries for {gene}')
-                continue
-
-            path = choice(entry) if isinstance(entry, list) else entry
-
-            fasta = SeqIO.read(path, 'fasta')
-            seqs.append(str(fasta.seq))
-
-        seqs = tuple(seqs)
-
-        if len(seqs) == 1 and not self.return_tuple_only:
-            return seqs[0]
-
-        return seqs
 
 # remap dataframe functions
 
