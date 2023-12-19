@@ -216,9 +216,9 @@ class AdapterModel(nn.Module):
         self,
         smi,
         aa,
+        label,
         aa_embed = None,
         aa_mask = None,
-        target = None
     ):
         device = smi.device
 
@@ -260,4 +260,4 @@ class AdapterModel(nn.Module):
 
         pred = self.to_pred(logits)
 
-        return self.loss_fn(pred, target)
+        return self.loss_fn(pred, label)
