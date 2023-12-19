@@ -60,23 +60,6 @@ def l2norm(t):
 def prob_mask_like(t, prob):
     return torch.zeros_like(t).float().uniform_(0, 1) < prob
 
-# genetic sequence caching enformer forward decorator
-
-# def cache_enformer_forward(fn):
-#     cached_forward = cache_fn(fn, clear = True, path = 'genetic')
-
-#     @wraps(fn)
-#     def inner(seqs, *args, **kwargs):
-#         if seqs.ndim == 3:
-#             seqs = seqs.argmax(dim = -1)
-
-#         seq_list = seqs.unbind(dim = 0)
-#         seq_cache_keys = [''.join(list(map(str, one_seq.tolist()))) for one_seq in seq_list]
-#         outputs = [cached_forward(one_seq, *args, __cache_key = seq_cache_key, **kwargs) for one_seq, seq_cache_key in zip(seq_list, seq_cache_keys)]
-#         return torch.stack(outputs)
-
-#     return inner
-
 # FILIP adapter model
 
 class FILIP(nn.Module):
@@ -167,7 +150,7 @@ class AdapterModel(nn.Module):
         latent_heads = 32,
         aa_embed_dim = 1280,
         aa_embed_encoder = 'esm',
-        contextual_embed_dim = None,
+        smiles_embed_encoder = 'chemberta',
         dropout = 0.,
         joint_cross_attn_depth = 1,
         protein_self_attn_depth = 0,
