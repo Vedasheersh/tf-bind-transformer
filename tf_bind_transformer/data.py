@@ -10,6 +10,7 @@ import os
 import json
 import shutil
 import numpy as np
+from sklearn.model_selection import train_test_split
 
 import torch
 from torch.utils.data import DataLoader
@@ -40,6 +41,14 @@ def cast_list(val = None):
 def read_csv(path):
     return pd.read_csv(path)
 
+def split_df(df, splitby = 'random', test_size = 0.1, seed = 0):
+    assert splitby=='random', 'other splitting methods not implemented yet'
+    
+    df.reset_index(inplace=True)
+    train_df, valid_df = train_test_split(df, test_size, random_state = seed)
+    
+    return train_df.reset_index(drop=True), valid_df.reset_index(drop=True)
+    
 def fetch_experiments_index(path):
     if not exists(path):
         return dict()
